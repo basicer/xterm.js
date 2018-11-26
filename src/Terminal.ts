@@ -21,7 +21,7 @@
  *   http://linux.die.net/man/7/urxvt
  */
 
-import { IInputHandlingTerminal, IViewport, ICompositionHelper, ITerminalOptions, ITerminal, IBrowser, ILinkifier, ILinkMatcherOptions, CustomKeyEventHandler, LinkMatcherHandler, CharData, CharacterJoinerHandler, IBufferLine } from './Types';
+import { IInputHandlingTerminal, IViewport, ICompositionHelper, ITerminalOptions, ITerminal, IBrowser, ILinkifier, ILinkMatcherOptions, CustomKeyEventHandler, LinkMatcherHandler, CharData, CharacterJoinerHandler, IBufferLine, ExtraCharData } from './Types';
 import { IMouseZoneManager } from './ui/Types';
 import { IRenderer } from './renderer/Types';
 import { BufferSet } from './BufferSet';
@@ -171,6 +171,7 @@ export class Terminal extends EventEmitter implements ITerminal, IDisposable, II
 
   public curAttr: number;
   public savedCurAttr: number;
+  public curExtra: ExtraCharData;
 
   public params: (string | number)[];
   public currentParam: string | number;

@@ -44,6 +44,136 @@ class RequestTerminfo implements IDcsHandler {
   }
 }
 
+class REGIS implements IDcsHandler {
+  private _data: string;
+  constructor(private _terminal: any) { }
+  hook(collect: string, params: number[], flag: number): void {
+    console.log("START", arguments);
+    this._data = '';
+  }
+  put(data: string, start: number, end: number): void {
+    console.log("PUT");
+    this._data += data.substring(start, end);
+  }
+  unhook(): void {
+    // invalid: DCS 0 + r Pt ST
+    // this._terminal.handler(`${C0.ESC}P0+r${this._data}${C0.ESC}\\`);
+    const buffer = this._terminal.buffer;
+    const curAttr = this._terminal.curAttr;
+    const bufferRow = buffer.lines.get(buffer.y + buffer.ybase);
+    console.log("REGIS", this._data);
+    bufferRow.set(++buffer.x, [curAttr, ' ', 1, ' '.charCodeAt(0), {
+      regis: this._data
+    }]);
+  }
+}
+
+class SIXEL implements IDcsHandler {
+  private _data: string;
+  constructor(private _terminal: any) { }
+  hook(collect: string, params: number[], flag: number): void {
+    this._data = '';
+  }
+  put(data: string, start: number, end: number): void {
+    this._data += data.substring(start, end);
+  }
+  unhook(): void {
+    // invalid: DCS 0 + r Pt ST
+    // this._terminal.handler(`${C0.ESC}P0+r${this._data}${C0.ESC}\\`);
+    let pos = 0;
+    let color = 0;
+    const colors: {[idx: number]: number} = {};
+
+    const read = () => this._data[pos++];
+    const peek = () => this._data[pos];
+
+    function readNumber(): number {
+      let n = 0;
+      while ( /[0-9]/.test(peek()) ) {
+        n = n * 10 + parseInt(read());
+      }
+      return n;
+    };
+
+
+    const buffer = this._terminal.buffer;
+    // const curAttr = this._terminal.curAttr;
+    let cellx = buffer.x;
+    let subposx = 0;
+    let subposy = 0;
+    let sx = 6;
+    let sy = 2;
+    let n = 1;
+
+    while ( pos < this._data.length ) {
+      const op = read();
+      switch ( op ) {
+        case '#':
+          color = readNumber();
+          break;
+        case ';':
+          readNumber();
+          const r = (read(), 255 * readNumber() / 100);
+          const g = (read(), 255 * readNumber() / 100);
+          const b = (read(), 255 * readNumber() / 100);
+          colors[color] = (b << 16) | (g << 8) | r;
+          break;
+        case '$':
+          cellx = 0;
+          subposx = 0;
+          break;
+        case '-':
+          cellx = 0;
+          subposx = 0;
+          if ( ++subposy >= sy ) {
+            buffer.y += 1;
+            if (buffer.y > buffer.scrollBottom) {
+              buffer.y--;
+              this._terminal.scroll(true);
+            }
+            subposy = 0;
+          }
+
+          break;
+        case '!':
+          n = readNumber();
+          break;
+        case '"':
+          console.log();
+          let x = [];
+          x.push(readNumber());
+          while ( read() === ';' ) x.push(readNumber());
+          console.log("RASTER SET", x);
+          break;
+        case '\n':
+        case '\r':
+          break;
+        default:
+          for ( let i = 0; i < n; ++i ) {
+            const celly = buffer.y + buffer.ybase;
+            const cell = buffer.lines.get(celly).get(cellx);
+            const val = op.charCodeAt(0) - '?'.charCodeAt(0);
+            if ( cell && val > 0 ) {
+              let target = cell[4];
+              if ( !target ) {
+                target = {sixel: [[], [], [], [], [], [], [], [], [], [], [], []]};
+                buffer.lines.get(celly).set(cellx, [cell[0], cell[1], cell[2], cell[3], target]);
+              }
+              target.sixel[subposx + sx * subposy].push(colors[color], val);
+            }
+            // console.log("VALUE", op, op.charCodeAt(0), val, cellx, celly, target);
+            if ( ++subposx >= sx) {
+              subposx = 0;
+              ++cellx;
+            }
+          }
+
+          n = 1;
+      }
+    }
+  }
+}
+
 /**
  * DCS $ q Pt ST
  *   DECRQSS (https://vt100.net/docs/vt510-rm/DECRQSS.html)
@@ -218,6 +348,8 @@ export class InputHandler extends Disposable implements IInputHandler {
     //   5 - Change Special Color Number
     //   6 - Enable/disable Special Color Number c
     //   7 - current directory? (not in xterm spec, see https://gitlab.com/gnachman/iterm2/issues/3939)
+    //   8 - hyperlink
+    this._parser.setOscHandler(8, (data) => this.makeLink(data));
     //  10 - Change VT100 text foreground color to Pt.
     //  11 - Change VT100 text background color to Pt.
     //  12 - Change text cursor color to Pt.
@@ -245,6 +377,10 @@ export class InputHandler extends Disposable implements IInputHandler {
     // 117 - Reset highlight color.
     // 118 - Reset Tektronix cursor color.
     // 119 - Reset highlight foreground color.
+    this._parser.setOscHandler(1337, (data) => this.drawImage(data));
+    this._parser.setOscHandler(1338, (data) => {
+      (this._terminal as any).soundManager.playSound(data);
+    });
 
     /**
      * ESC handlers
@@ -288,6 +424,9 @@ export class InputHandler extends Disposable implements IInputHandler {
      */
     this._parser.setDcsHandler('$q', new DECRQSS(this._terminal));
     this._parser.setDcsHandler('+q', new RequestTerminfo(this._terminal));
+    this._parser.setDcsHandler('p', new REGIS(this._terminal));
+    this._parser.setDcsHandler('q', new SIXEL(this._terminal));
+    //this._parser.setDcsHandlerFallback(new SIXEL(this._terminal));
   }
 
   public dispose(): void {
@@ -329,6 +468,7 @@ export class InputHandler extends Disposable implements IInputHandler {
     let code: number;
     let low: number;
     let chWidth: number;
+    let extra = this._terminal.curExtra;
     const buffer: IBuffer = this._terminal.buffer;
     const charset: ICharset = this._terminal.charset;
     const screenReaderMode: boolean = this._terminal.options.screenReaderMode;
@@ -436,25 +576,25 @@ export class InputHandler extends Disposable implements IInputHandler {
       // insert mode: move characters to right
       if (insertMode) {
         // right shift cells according to the width
-        bufferRow.insertCells(buffer.x, chWidth, [curAttr, NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE]);
+        bufferRow.insertCells(buffer.x, chWidth, [curAttr, NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE, extra]);
         // test last cell - since the last cell has only room for
         // a halfwidth char any fullwidth shifted there is lost
         // and will be set to eraseChar
         const lastCell = bufferRow.get(cols - 1);
         if (lastCell[CHAR_DATA_WIDTH_INDEX] === 2) {
-          bufferRow.set(cols - 1, [curAttr, NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE]);
+          bufferRow.set(cols - 1, [curAttr, NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE, extra]);
         }
       }
 
       // write current char to buffer and advance cursor
-      bufferRow.set(buffer.x++, [curAttr, char, chWidth, code]);
+      bufferRow.set(buffer.x++, [curAttr, char, chWidth, code, extra]);
 
       // fullwidth char - also set next cell to placeholder stub and advance cursor
       // for graphemes bigger than fullwidth we can simply loop to zero
       // we already made sure above, that buffer.x + chWidth will not overflow right
       if (chWidth > 0) {
         while (--chWidth) {
-          bufferRow.set(buffer.x++, [curAttr, '', 0, undefined]);
+          bufferRow.set(buffer.x++, [curAttr, '', 0, undefined, extra]);
         }
       }
     }
@@ -1877,6 +2017,53 @@ export class InputHandler extends Disposable implements IInputHandler {
    */
   public setTitle(data: string): void {
     this._terminal.handleTitle(data);
+  }
+
+  public makeLink(data: string): void {
+    if ( data.length > 1 ) {
+      this._terminal.curExtra = {link: data};
+    } else {
+      this._terminal.curExtra = undefined;
+    }
+  }
+
+  public drawImage(data: string): void {
+    const buffer: IBuffer = this._terminal.buffer;
+    const curAttr = this._terminal.curAttr;
+    const bufferRow = buffer.lines.get(buffer.y + buffer.ybase);
+    const image = new Image();
+    const parts = data.split(':');
+    console.log('DRAW IMAGE', parts);
+    const magic = atob(parts[1].substr(0, 8));
+
+    if (/^PNG/.test(magic)) {
+      image.src = 'data:image/png;base64,' + parts[1];
+    } else if (/^JPEG/.test(magic)) {
+      image.src = 'data:image/jpeg;base64,' + parts[1];
+    } else if (/^BM/.test(magic)) {
+      image.src = 'data:image/bmp;base64,' + parts[1];
+    } else if ( /</.test(magic) ) {
+      image.src = 'data:image/svg+xml;base64,' + parts[1];
+    }
+
+    console.log(image.src);
+
+    let lines = 10;
+    parts[0].split(';').map(x => {
+      const [k, v] = x.split('=');
+      if ( k === 'height' ) lines = parseInt(v);
+    });
+    bufferRow.set(buffer.x, [curAttr, ' ', 1, ' '.charCodeAt(0), {
+      image: {image: image, lines: lines}
+    }]);
+
+    for (let i = 0; i < lines - 1; ++ i ) {
+      buffer.y += 1;
+      if (buffer.y > buffer.scrollBottom) {
+        buffer.y--;
+        this._terminal.scroll(true);
+      }
+    }
   }
 
   /**

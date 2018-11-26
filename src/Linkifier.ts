@@ -7,7 +7,7 @@ import { IMouseZoneManager } from './ui/Types';
 import { ILinkHoverEvent, ILinkMatcher, LinkMatcherHandler, LinkHoverEventTypes, ILinkMatcherOptions, ILinkifier, ITerminal, IBufferStringIteratorResult } from './Types';
 import { MouseZone } from './ui/MouseZoneManager';
 import { EventEmitter } from './common/EventEmitter';
-import { CHAR_DATA_ATTR_INDEX } from './Buffer';
+import { CHAR_DATA_ATTR_INDEX, CHAR_DATA_EXTRA_INDEX } from './Buffer';
 import { getStringCellWidth } from './CharWidth';
 
 /**
@@ -116,6 +116,51 @@ export class Linkifier extends EventEmitter implements ILinkifier {
       const lineData: IBufferStringIteratorResult = iterator.next();
       for (let i = 0; i < this._linkMatchers.length; i++) {
         this._doLinkifyRow(lineData.range.first, lineData.content, this._linkMatchers[i]);
+      }
+    }
+
+    for (let y = absoluteRowIndexStart; y <= absoluteRowIndexEnd; ++y ) {
+      const line = this._terminal.buffer.lines.get(y);
+      if ( line ) {
+      for ( let x = 0; x < line.length; ++x ) {
+        const c = line.get(x);
+        if (c[CHAR_DATA_EXTRA_INDEX] && c[CHAR_DATA_EXTRA_INDEX].link) {
+          const extra = c[CHAR_DATA_EXTRA_INDEX];
+          const x1 = x;
+          const y1 = y - buffer.ydisp;
+          while (line.get(x)[CHAR_DATA_EXTRA_INDEX] === extra ) ++x;
+          const x2 = x;
+          const y2 = y - buffer.ydisp;
+          const attr: number = c[CHAR_DATA_ATTR_INDEX];
+          const fg = (attr >> 9) & 0x1ff;
+
+          this._mouseZoneManager.add(new MouseZone(
+            x1 + 1,
+            y1 + 1,
+            x2 + 1,
+            y2 + 1,
+            e => {
+              this._terminal.emit('link', extra.link.split(';')[1]);
+            },
+            e => {
+              this.emit(LinkHoverEventTypes.HOVER, this._createLinkHoverEvent(x1, y1, x2, y2, fg));
+              this._terminal.element.classList.add('xterm-cursor-pointer');
+            },
+            e => {
+              this.emit(LinkHoverEventTypes.TOOLTIP, this._createLinkHoverEvent(x1, y1, x2, y2, fg));
+
+            },
+            () => {
+              this.emit(LinkHoverEventTypes.LEAVE, this._createLinkHoverEvent(x1, y1, x2, y2, fg));
+              this._terminal.element.classList.remove('xterm-cursor-pointer');
+
+            },
+            e => {
+              return true;
+            }
+          ));
+        }
+      }
       }
     }
 

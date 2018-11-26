@@ -14,6 +14,7 @@ export const CHAR_DATA_ATTR_INDEX = 0;
 export const CHAR_DATA_CHAR_INDEX = 1;
 export const CHAR_DATA_WIDTH_INDEX = 2;
 export const CHAR_DATA_CODE_INDEX = 3;
+export const CHAR_DATA_EXTRA_INDEX = 4;
 export const MAX_BUFFER_SIZE = 4294967295; // 2^32 - 1
 
 export const NULL_CELL_CHAR = ' ';

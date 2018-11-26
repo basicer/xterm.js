@@ -31,17 +31,21 @@ export class SoundManager implements ISoundManager {
   ) {
   }
 
-  public playBellSound(): void {
+  public playSound(s: string): void {
     const ctx = SoundManager.audioContext;
     if (!ctx) {
       return;
     }
     const bellAudioSource = ctx.createBufferSource();
-    ctx.decodeAudioData(this._base64ToArrayBuffer(this._removeMimeType(this._terminal.options.bellSound)), (buffer) => {
+    ctx.decodeAudioData(this._base64ToArrayBuffer(this._removeMimeType(s)), (buffer) => {
       bellAudioSource.buffer = buffer;
       bellAudioSource.connect(ctx.destination);
       bellAudioSource.start(0);
     });
+  }
+
+  public playBellSound(): void {
+    this.playSound(this._terminal.options.bellSound);
   }
 
   private _base64ToArrayBuffer(base64: string): ArrayBuffer {

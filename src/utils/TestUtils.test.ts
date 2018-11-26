@@ -4,7 +4,7 @@
  */
 
 import { IColorSet, IRenderer, IRenderDimensions, IColorManager } from '../renderer/Types';
-import { IInputHandlingTerminal, IViewport, ICompositionHelper, ITerminal, IBuffer, IBufferSet, IBrowser, ICharMeasure, ISelectionManager, ITerminalOptions, ILinkifier, IMouseHelper, ILinkMatcherOptions, CharacterJoinerHandler, IBufferLine, IBufferStringIterator } from '../Types';
+import { IInputHandlingTerminal, IViewport, ICompositionHelper, ITerminal, IBuffer, IBufferSet, IBrowser, ICharMeasure, ISelectionManager, ITerminalOptions, ILinkifier, IMouseHelper, ILinkMatcherOptions, CharacterJoinerHandler, IBufferLine, IBufferStringIterator, ExtraCharData } from '../Types';
 import { ICircularList, XtermListener } from '../common/Types';
 import { Buffer } from '../Buffer';
 import * as Browser from '../shared/utils/Browser';
@@ -182,6 +182,7 @@ export class MockInputHandlingTerminal implements IInputHandlingTerminal {
   wraparoundMode: boolean;
   bracketedPasteMode: boolean;
   curAttr: number;
+  curExtra: ExtraCharData;
   savedCurAttr: number;
   savedCols: number;
   x10Mouse: boolean;

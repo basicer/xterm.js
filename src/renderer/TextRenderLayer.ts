@@ -3,9 +3,9 @@
  * @license MIT
  */
 
-import { CHAR_DATA_ATTR_INDEX, CHAR_DATA_CODE_INDEX, CHAR_DATA_CHAR_INDEX, CHAR_DATA_WIDTH_INDEX, NULL_CELL_CODE } from '../Buffer';
+import { CHAR_DATA_ATTR_INDEX, CHAR_DATA_CODE_INDEX, CHAR_DATA_CHAR_INDEX, CHAR_DATA_WIDTH_INDEX, NULL_CELL_CODE, CHAR_DATA_EXTRA_INDEX } from '../Buffer';
 import { FLAGS, IColorSet, IRenderDimensions, ICharacterJoinerRegistry } from './Types';
-import { CharData, ITerminal } from '../Types';
+import { CharData, ITerminal, ExtraCharData } from '../Types';
 import { INVERTED_DEFAULT_COLOR } from './atlas/Types';
 import { GridCache } from './GridCache';
 import { BaseRenderLayer } from './BaseRenderLayer';
@@ -63,7 +63,8 @@ export class TextRenderLayer extends BaseRenderLayer {
       y: number,
       fg: number,
       bg: number,
-      flags: number
+      flags: number,
+      extra: ExtraCharData
     ) => void
   ): void {
     for (let y = firstRow; y <= lastRow; y++) {
@@ -79,7 +80,7 @@ export class TextRenderLayer extends BaseRenderLayer {
         let chars: string = charData[CHAR_DATA_CHAR_INDEX];
         const attr: number = charData[CHAR_DATA_ATTR_INDEX];
         let width: number = charData[CHAR_DATA_WIDTH_INDEX];
-
+        const extra: ExtraCharData = charData[CHAR_DATA_EXTRA_INDEX];
         // If true, indicates that the current character(s) to draw were joined.
         let isJoined = false;
         let lastCharX = x;
@@ -159,7 +160,8 @@ export class TextRenderLayer extends BaseRenderLayer {
           y,
           fg,
           bg,
-          flags
+          flags,
+          extra
         );
 
         x = lastCharX;
@@ -180,7 +182,14 @@ export class TextRenderLayer extends BaseRenderLayer {
 
     ctx.save();
 
-    this._forEachCell(terminal, firstRow, lastRow, null, (code, chars, width, x, y, fg, bg, flags) => {
+    let rws = Math.ceil(this._scaledCellWidth / 6);
+    let pw = Math.ceil(this._scaledCellHeight * rws);
+    var buf = new ArrayBuffer(4*pw);
+    var buf8 = new Uint8ClampedArray(buf);
+    var data = new Uint32Array(buf);
+    var id = new ImageData(buf8, rws, this._scaledCellHeight);
+
+    this._forEachCell(terminal, firstRow, lastRow, null, (code, chars, width, x, y, fg, bg, flags, extra) => {
       // libvte and xterm both draw the background (but not foreground) of invisible characters,
       // so we should too.
       let nextFillStyle = null; // null represents default background color
@@ -207,6 +216,61 @@ export class TextRenderLayer extends BaseRenderLayer {
         this.fillCells(startX, startY, x - startX, 1);
         startX = x;
         startY = y;
+      }
+
+      if ( extra && extra.image ) {
+        const image = extra.image.image;
+        const ratio = image.width / image.height;
+        const lines = extra.image.lines;
+        console.log('Draw Image', ratio, extra.image);
+        ctx.drawImage(
+          image,
+          x * this._scaledCellWidth,
+          y * this._scaledCellHeight,
+          lines * this._scaledCellHeight * ratio,
+          lines * this._scaledCellHeight
+          );
+      } else if ( extra && extra.regis ) {
+        console.log(extra.regis);
+      } else if ( extra && extra.sixel ) {
+        data.fill(0);
+        
+        for (let subpixelx = 0; subpixelx < 6; ++subpixelx ) {
+          for (let subpixely = 0; subpixely < 2; ++subpixely) {
+            const cell = extra.sixel[subpixelx + 6 * subpixely];
+            for (let o = 0; o < cell.length; o += 2) {
+              const color = cell[o];
+              const pixels = cell[o + 1];
+              if ( typeof color === 'undefined' ) continue;
+              /*
+              ctx.fillStyle = "#" + ("000000" + color.toString(16)).slice(-6);
+              for ( let i = 0; i < 6; ++i ) {
+                if ( pixels & (1 << i) ) {
+                  ctx.fillRect(
+                    (x + subpixelx / 3.0) * this._scaledCellWidth,
+                    (y + i/6.0) * this._scaledCellHeight,
+                    this._scaledCellWidth / 3.0,
+                    1+this._scaledCellHeight / 6.0
+                  );
+                }
+              }
+              */
+             let off = data.length/2 * subpixely;
+              let filled = 0;
+              for ( let i = 0; i < 6; ++i ) {
+                const target = Math.ceil((i + 1) * this._scaledCellHeight / 12.0) * rws;
+                if (pixels & (1 << i)) {
+                  data.fill(0xFF000000 | color, filled + off, target + off);
+                }
+                filled = target;
+              }
+
+            }
+            
+          }
+          ctx.putImageData(id, (6 * x + subpixelx) * rws, y * this._scaledCellHeight);
+
+        }
       }
 
       prevFillStyle = nextFillStyle;

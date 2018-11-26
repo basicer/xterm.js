@@ -11,7 +11,8 @@ import { ICircularList } from './common/Types';
 
 export type CustomKeyEventHandler = (event: KeyboardEvent) => boolean;
 
-export type CharData = [number, string, number, number];
+export type CharData = [number, string, number, number, ExtraCharData?];
+export type ExtraCharData = { link?: string, image?: any, regis?: string, sixel?: any } | undefined;
 export type LineData = CharData[];
 
 export type LinkMatcherHandler = (event: MouseEvent, uri: string) => void;
@@ -49,6 +50,7 @@ export interface IInputHandlingTerminal extends IEventEmitter {
   wraparoundMode: boolean;
   bracketedPasteMode: boolean;
   curAttr: number;
+  curExtra: ExtraCharData;
   savedCurAttr: number;
   savedCols: number;
   x10Mouse: boolean;

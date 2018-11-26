@@ -15,8 +15,8 @@ export abstract class BaseRenderLayer implements IRenderLayer {
   protected _ctx: CanvasRenderingContext2D;
   private _scaledCharWidth: number = 0;
   private _scaledCharHeight: number = 0;
-  private _scaledCellWidth: number = 0;
-  private _scaledCellHeight: number = 0;
+  protected _scaledCellWidth: number = 0;
+  protected _scaledCellHeight: number = 0;
   private _scaledCharLeft: number = 0;
   private _scaledCharTop: number = 0;
 
