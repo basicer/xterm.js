@@ -189,6 +189,7 @@ export class MockInputHandlingTerminal implements IInputHandlingTerminal {
   vt200Mouse: boolean;
   normalMouse: boolean;
   mouseEvents: boolean;
+  anyMouseEvents: boolean;
   sendFocus: boolean;
   utfMouse: boolean;
   sgrMouse: boolean;

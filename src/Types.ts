@@ -56,6 +56,7 @@ export interface IInputHandlingTerminal extends IEventEmitter {
   x10Mouse: boolean;
   vt200Mouse: boolean;
   normalMouse: boolean;
+  anyMouseEvents: boolean;
   mouseEvents: boolean;
   sendFocus: boolean;
   utfMouse: boolean;

@@ -1437,6 +1437,7 @@ export class InputHandler extends Disposable implements IInputHandler {
           this._terminal.x10Mouse = params[0] === 9;
           this._terminal.vt200Mouse = params[0] === 1000;
           this._terminal.normalMouse = params[0] > 1000;
+          this._terminal.anyMouseEvents = params[0] === 1003;
           this._terminal.mouseEvents = true;
           this._terminal.element.classList.add('enable-mouse-events');
           this._terminal.selectionManager.disable();
@@ -1619,6 +1620,7 @@ export class InputHandler extends Disposable implements IInputHandler {
           this._terminal.vt200Mouse = false;
           this._terminal.normalMouse = false;
           this._terminal.mouseEvents = false;
+          this._terminal.anyMouseEvents = false;
           this._terminal.element.classList.remove('enable-mouse-events');
           this._terminal.selectionManager.enable();
           break;

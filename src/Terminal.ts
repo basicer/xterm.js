@@ -158,6 +158,7 @@ export class Terminal extends EventEmitter implements ITerminal, IDisposable, II
   public vt200Mouse: boolean;
   private _vt300Mouse: boolean; // This is unstable and never set
   public normalMouse: boolean;
+  public anyMouseEvents: boolean;
   public mouseEvents: boolean;
   public sendFocus: boolean;
   public utfMouse: boolean;
@@ -1016,6 +1017,14 @@ export class Terminal extends EventEmitter implements ITerminal, IDisposable, II
 
       return button;
     }
+
+    this.register(addDisposableDomListener(el, 'mousemove', (ev: MouseEvent) => {
+      if (this.mouseEvents && this.anyMouseEvents && ev.buttons === 0) {
+        const pos = self.mouseHelper.getRawByteCoords(ev, self.screenElement, self.charMeasure, self.options.lineHeight, self.cols, self.rows);
+        if (!pos) return;
+        sendEvent(67, pos);
+      }
+    }));
 
     this.register(addDisposableDomListener(el, 'mousedown', (ev: MouseEvent) => {
 
