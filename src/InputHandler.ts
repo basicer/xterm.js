@@ -364,6 +364,41 @@ export class InputHandler extends Disposable implements IInputHandler {
     //  50 - Set Font to Pt.
     //  51 - reserved for Emacs shell.
     //  52 - Manipulate Selection Data.
+    this._parser.setOscHandler(72, (data) => {
+      if ( /^<svg/.test(data) ) {
+        this.drawImage('svg:' + btoa(data));
+        return;
+      }
+
+
+      let dom = document.createElement('div');
+      dom.style.display = 'block';
+      dom.style.overflow = 'auto';
+      let world = document.createElement("iframe");
+      world.src = "about:blank";
+      world.width = '800';
+      world.width = '600';
+      document.body.appendChild(world);
+      world.contentDocument.body.appendChild(dom);
+      dom.innerHTML = data;
+      
+      let w = dom.getBoundingClientRect().width;
+      let h = dom.getBoundingClientRect().height;
+      console.log(dom.getBoundingClientRect());
+      dom.remove();
+      world.remove();
+
+      let oink = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+          <style> foreignObject { color: white; } #root { margin: 0 0 0 0; } </style>
+          <foreignObject x="0" y="0" width="${w}" height="${h}">
+            <body id="root" xmlns="http://www.w3.org/1999/xhtml">
+              ${data}
+            </body>
+          </foreignObject>
+        </svg>`;
+      console.log(oink);
+      this.drawImage('height=' + Math.ceil(h/20) + ':' + btoa(oink));
+    });
     // 104 ; c - Reset Color Number c.
     // 105 ; c - Reset Special Color Number c.
     // 106 ; c; f - Enable/disable Special Color Number c.
@@ -2033,24 +2068,25 @@ export class InputHandler extends Disposable implements IInputHandler {
     const buffer: IBuffer = this._terminal.buffer;
     const curAttr = this._terminal.curAttr;
     const bufferRow = buffer.lines.get(buffer.y + buffer.ybase);
-    const image = new Image();
+    let image = new Image();
     const parts = data.split(':');
     console.log('DRAW IMAGE', parts);
     const magic = atob(parts[1].substr(0, 8));
-
-    if (/^PNG/.test(magic)) {
+    console.log(magic)
+    if (/^.PNG/.test(magic)) {
       image.src = 'data:image/png;base64,' + parts[1];
-    } else if (/^JPEG/.test(magic)) {
+    } else if (/^ÿØÿà/.test(magic)) {
       image.src = 'data:image/jpeg;base64,' + parts[1];
     } else if (/^BM/.test(magic)) {
       image.src = 'data:image/bmp;base64,' + parts[1];
     } else if ( /</.test(magic) ) {
       image.src = 'data:image/svg+xml;base64,' + parts[1];
+    } else {
+      console.log("Unknwon Magic", magic, parts[1].substr(0, 8));
     }
 
-    console.log(image.src);
-
-    let lines = 10;
+    console.log("DATA", image, image.height, image.width, "X");
+    let lines = 20;
     parts[0].split(';').map(x => {
       const [k, v] = x.split('=');
       if ( k === 'height' ) lines = parseInt(v);
@@ -2059,13 +2095,14 @@ export class InputHandler extends Disposable implements IInputHandler {
       image: {image: image, lines: lines}
     }]);
 
-    for (let i = 0; i < lines - 1; ++ i ) {
+    for (let i = 0; i < lines; ++ i ) {
       buffer.y += 1;
       if (buffer.y > buffer.scrollBottom) {
         buffer.y--;
         this._terminal.scroll(true);
       }
     }
+
   }
 
   /**
